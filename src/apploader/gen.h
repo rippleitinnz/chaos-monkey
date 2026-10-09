@@ -18,6 +18,14 @@
  * Written for the Hook guard budget (65535 worst-case instructions): every
  * loop appears once, tag strings go through one segment writer, and padding
  * is written eight bytes per iteration.
+ *
+ * Fault classes 22-26 added in v2:
+ *   22 F_BODY_C0      : other forbidden C0 control in body (SOH..US minus whitespace/VT/NUL/DEL)
+ *   23 F_OPENER_C0    : forbidden C0 control other than VT before the opener
+ *   24 F_CLOSE_NO_GT  : </html without closing > (truncated close tag)
+ *   25 F_DOCTYPE_OTHER: <!doctype svg> — non-html doctype; must PASS (spec only requires
+ *                       "<!doctype " prefix), exercises the validator doesn't check the name
+ *   26 F_MULTI_CLOSE  : multiple </html> tags; must PASS — last match wins, nothing after
  */
 
 #ifndef CHAOS_GEN_H
@@ -55,11 +63,18 @@
 #define F_BODY_NUL 19
 #define F_BODY_DEL 20
 #define F_BODY_VT 21
-#define F_COUNT 22
+#define F_BODY_C0 22    /* other forbidden C0 (SOH/STX/ETX/etc.) in body      */
+#define F_OPENER_C0 23  /* forbidden C0 (not VT/NUL/DEL) before opener        */
+#define F_CLOSE_NO_GT 24 /* </html with no closing >                          */
+#define F_DOCTYPE_OTHER 25 /* <!doctype svg> — non-html name; must PASS       */
+#define F_MULTI_CLOSE 26   /* multiple </html> tags; must PASS (last wins)    */
+#define F_COUNT 27
 
-/* Body items: first byte = length. 0..11 must pass; 12..21 are the body
-   faults, indexed by their fault id (F_BODY_FFFE == 12 .. F_BODY_VT == 21). */
-static const unsigned char ITEMS[22][5] = {
+/* Body items: first byte = length. 0..11 must pass; 12..22 are the body
+   faults, indexed by their fault id (F_BODY_FFFE == 12 .. F_BODY_C0 == 22).
+   F_OPENER_C0..F_MULTI_CLOSE (23-26) are not body-item faults; pad to keep
+   the table index scheme consistent (the extra entry is never selected). */
+static const unsigned char ITEMS[27][5] = {
     {1, 'a', 0, 0, 0},
     {1, 'Z', 0, 0, 0},
     {1, ' ', 0, 0, 0},
@@ -82,6 +97,12 @@ static const unsigned char ITEMS[22][5] = {
     {1, 0x00, 0, 0, 0},             /* NUL                    */
     {1, 0x7F, 0, 0, 0},             /* DEL                    */
     {1, 0x0B, 0, 0, 0},             /* VT                     */
+    {1, 0x01, 0, 0, 0},             /* SOH — other C0 control */
+    /* padding entries for F_OPENER_C0..F_MULTI_CLOSE (23-26); never used */
+    {1, 'a', 0, 0, 0},
+    {1, 'a', 0, 0, 0},
+    {1, 'a', 0, 0, 0},
+    {1, 'a', 0, 0, 0},
 };
 
 static const unsigned char WS[5] = {0x09, 0x0A, 0x0C, 0x0D, 0x20};
@@ -95,14 +116,23 @@ static const unsigned char WS[5] = {0x09, 0x0A, 0x0C, 0x0D, 0x20};
 #define S_HTML_SELF 5   /* "<html/>"          */
 #define S_HTMLX 6       /* "<htmlx>"          */
 #define S_HTML_DIR 7    /* "<html\tdir=ltr>"  */
-#define S_CLOSE 8       /* "</html"           */
-#define S_CLOSE_SLASH 9 /* "</html/>"         */
-#define S_CLOSE_X 10    /* "</htmlx>"         */
-static const char* const STR[11] = {"<!doctype", "<!doctype>", "html>",
+#define S_CLOSE 8          /* "</html"              */
+#define S_CLOSE_SLASH 9    /* "</html/>"            */
+#define S_CLOSE_X 10       /* "</htmlx>"            */
+#define S_DOCTYPE_SVG 11   /* "<!doctype svg>"      */
+static const char* const STR[12] = {"<!doctype", "<!doctype>", "html>",
                                     "<html>", "<html lang=en>", "<html/>",
                                     "<htmlx>", "<html\tdir=ltr>", "</html",
-                                    "</html/>", "</htmlx>"};
-static const unsigned char STRLEN[11] = {9, 10, 5, 6, 14, 7, 7, 14, 6, 8, 8};
+                                    "</html/>", "</htmlx>",
+                                    "<!doctype svg>"};
+static const unsigned char STRLEN[12] = {9, 10, 5, 6, 14, 7, 7, 14, 6, 8, 8,
+                                         14};
+
+/* Returns 1 if the fault class means the document should pass */
+GI int fault_is_pass(int f)
+{
+    return f == F_NONE || f == F_DOCTYPE_OTHER || f == F_MULTI_CLOSE;
+}
 
 GI int gen(const unsigned char* r, unsigned char* o, int* len)
 {
@@ -126,6 +156,8 @@ GI int gen(const unsigned char* r, unsigned char* o, int* len)
     }
     if (fault == F_VT_LEAD)
         o[p++] = 0x0B;
+    if (fault == F_OPENER_C0)
+        o[p++] = 0x01; /* SOH — forbidden C0, not VT/NUL/DEL */
 
     /* ---- opener: up to 3 segments, written by one flat loop ---- */
     int seg[3];
@@ -139,6 +171,16 @@ GI int gen(const unsigned char* r, unsigned char* o, int* len)
     }
     else if (fault == F_HTMLX_OPENER)
         seg[nseg++] = S_HTMLX;
+    else if (fault == F_DOCTYPE_OTHER)
+    {
+        /* "<!doctype svg>" — non-html doctype name; validator only checks
+           the "<!doctype " prefix, so this must pass */
+        seg[nseg++] = S_DOCTYPE_SVG;
+        ws_after_first = -1; /* no extra WS; the string is complete */
+        seg[nseg++] = vhtml == 0 ? S_HTML
+            : vhtml == 1         ? S_HTML_LANG
+                                 : S_HTML_SELF;
+    }
     else if ((r[6] & 3) != 0 || fault == F_NO_HTML_ELEMENT)
     {
         seg[nseg++] = S_DOCTYPE;
@@ -174,11 +216,12 @@ GI int gen(const unsigned char* r, unsigned char* o, int* len)
 
     /* ---- body: pass items, then the body fault (if any) ---- */
     int items = 1 + r[8] % 24;
-    int total = items + (fault >= F_BODY_FFFE ? 1 : 0);
+    int body_fault = (fault >= F_BODY_FFFE && fault <= F_BODY_C0);
+    int total = items + (body_fault ? 1 : 0);
     int fault_slot = r[9] % total; /* where the fault item goes */
     for (int i = 0; GUARD(25), i < total; ++i)
     {
-        int idx = (fault >= F_BODY_FFFE && i == fault_slot)
+        int idx = (body_fault && i == fault_slot)
             ? fault
             : r[10 + (i % 16)] % 12;
         o[p] = ITEMS[idx][1];
@@ -190,13 +233,29 @@ GI int gen(const unsigned char* r, unsigned char* o, int* len)
 
     /* ---- closing section sizes, for exact-length padding ---- */
     int close_ws = r[26] % 3;
-    int close_seg = fault == F_CLOSE_SLASH ? S_CLOSE_SLASH
-        : fault == F_CLOSE_HTMLX           ? S_CLOSE_X
-        : fault == F_MISSING_CLOSE         ? -1
-                                           : S_CLOSE;
-    int close_len = close_seg < 0 ? 0
-        : close_seg == S_CLOSE    ? 7 + close_ws
-                                  : 8;
+
+    /* F_MULTI_CLOSE: emit a decoy </html> then some body content, then the
+       real </html> — last match wins, nothing follows, so it must pass.
+       Decoy is 7 bytes ("</html>"), body content is 1 byte ('x'), real
+       close is written in the close section below. */
+    if (fault == F_MULTI_CLOSE)
+    {
+        /* write a decoy close */
+        o[p++] = '<'; o[p++] = '/'; o[p++] = 'h';
+        o[p++] = 't'; o[p++] = 'm'; o[p++] = 'l'; o[p++] = '>';
+        o[p++] = 'x'; /* content between closes */
+    }
+
+    int close_seg = fault == F_CLOSE_SLASH  ? S_CLOSE_SLASH
+        : fault == F_CLOSE_HTMLX            ? S_CLOSE_X
+        : fault == F_MISSING_CLOSE          ? -1
+        : fault == F_CLOSE_NO_GT            ? S_CLOSE   /* written without > */
+                                            : S_CLOSE;  /* normal */
+    /* For F_CLOSE_NO_GT: we write </html but no WS or >, so length is 6 */
+    int close_len = close_seg < 0                         ? 0
+        : (fault == F_CLOSE_NO_GT)                        ? 6
+        : (close_seg == S_CLOSE || fault == F_MULTI_CLOSE)? 7 + close_ws
+                                                          : 8;
     int trail_ws = r[27] % 4;
     int tail_len = trail_ws + (fault == F_TRAILING_GARBAGE ? 1 : 0) +
         (fault == F_TRUNCATED_END ? 2 : 0);
@@ -206,6 +265,7 @@ GI int gen(const unsigned char* r, unsigned char* o, int* len)
                                      : 0;
     if (target)
     {
+        /* p already includes any bytes written by F_MULTI_CLOSE decoy above */
         int pad = target - p - close_len - tail_len;
         /* eight bytes per iteration; overrun is overwritten by what follows
            or lies beyond the document */
@@ -229,12 +289,13 @@ GI int gen(const unsigned char* r, unsigned char* o, int* len)
                 c = (unsigned char)(c - 32);
             o[p++] = c;
         }
-        if (close_seg == S_CLOSE)
+        if (close_seg == S_CLOSE && fault != F_CLOSE_NO_GT)
         {
             for (int i = 0; GUARD(2), i < close_ws; ++i)
                 o[p++] = WS[(r[29] >> i) % 5];
             o[p++] = '>';
         }
+        /* F_CLOSE_NO_GT: </html written above, no > appended — truncated tag */
     }
 
     for (int i = 0; GUARD(3), i < trail_ws; ++i)

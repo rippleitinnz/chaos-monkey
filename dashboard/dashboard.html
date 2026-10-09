@@ -15,7 +15,7 @@ h2{font-size:11px;color:#888;font-weight:400}
 <p>A Hook wakes itself every few ledgers, builds a random HTML page and submits it via emit(), so the node's real AppLoader validation judges it inside consensus. <b class=o>Green</b>: clean, must pass. <b class=y>Amber</b>: one broken rule, must fail. <b class=b>Red</b>: consensus disagreed with the spec.</p>
 <div class=k id=k></div><div id=s><i></i></div><h2>COVERAGE</h2><div class=g id=g></div><h2>LIVE WAKES</h2><div id=e></div><p id=t></p></main><script>
 const F="FUZZER",NS="NAMESPACE",
-N="clean|2x BOM|VT lead|<!doctype>|<htmlx>|no <html>|no </html>|</html/>|</htmlx>|junk tail|cut UTF-8|4097 B|U+FFFE|U+FFFF|overlong2|overlong3|surrogate|>U+10FFFF|lone cont|NUL|DEL|VT body".split("|"),
+N="clean|2x BOM|VT lead|<!doctype>|<htmlx>|no <html>|no </html>|</html/>|</htmlx>|junk tail|cut UTF-8|4097 B|U+FFFE|U+FFFF|overlong2|overlong3|surrogate|>U+10FFFF|lone cont|NUL|DEL|VT body|C0 body|C0 lead|no </html>gt|svg doctype✓|multi-close✓".split("|"),
 C=N.map(_=>0),X=C.slice(),E=[],S=[0,0,0,0,0],Q={},$=i=>document.getElementById(i),z=s=>s.replace(/</g,"&lt;");
 let L=0,n=0,w;
 const q=(o,f)=>{o.id=++n;Q[n]=f;w.send(JSON.stringify(o))};
@@ -30,7 +30,7 @@ const st=()=>q({command:"account_namespace",account:F,namespace_id:NS},r=>{
 const R=()=>{
  $("k").innerHTML=["Runs","OK pass","OK fail","Findings","Harness err"].map((t,j)=>`<div${j>2&&S[j]?" class=r":""}>${t}<b>${S[j]}</b></div>`).join("");
  $("s").firstChild.style.width=(S[1]+S[2]?100*S[1]/(S[1]+S[2]):50)+"%";
- $("g").innerHTML=N.map((t,f)=>`<div class="${C[f]?"h ":""}${X[f]?"x":f?"f":"p"}">${z(t)}<b>${C[f]}</b></div>`).join("");
+ const P=new Set([0,25,26]);$("g").innerHTML=N.map((t,f)=>`<div class="${C[f]?"h ":""}${X[f]?"x":P.has(f)?"p":"f"}">${z(t)}<b>${C[f]}</b></div>`).join("");
  $("e").innerHTML=E.slice(0,14).map(o=>`<div>#${o.l} ${z(N[o.f])} &rarr; must ${o.f?"fail":"pass"} ${o.b?"<b class=b>FINDING</b>":"<b class=o>&#10003;</b>"}</div>`).join("")||"waiting";
  $("t").innerHTML=`Now serving a ${L}-byte test document &middot; <a href="https://pwa.pwapp.xahau-dev.net/${F}" target=_blank>open</a>`};
 const go=()=>{w=new WebSocket("wss://pwapp.xahau-dev.net");

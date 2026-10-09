@@ -110,7 +110,7 @@ int64_t hook(uint32_t reserved)
         observed_pass = emit(SBUF(h), (uint32_t)prepared, plen) == 32;
     }
 
-    int expected_pass = fault == F_NONE;
+    int expected_pass = fault_is_pass(fault);
 
     /* 4. Record */
     if (harness_error)
