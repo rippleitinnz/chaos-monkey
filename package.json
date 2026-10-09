@@ -2,6 +2,9 @@
   "name": "chaos-monkey",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "dependencies": {
     "xrpl-accountlib": "^9.3.2",
     "xrpl-client": "^2.4.0"

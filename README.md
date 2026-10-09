@@ -51,7 +51,7 @@ from the branch.
 
 ## Quick start (PWA devnet)
 
-Needs Node 18+. Run it anywhere with outbound internet; keep it off production
+Needs Node 20.19 or newer (Node 22 recommended): a dependency, `@noble/hashes` 2.x, is ESM-only and older Node cannot `require()` it. Run it anywhere with outbound internet; keep it off production
 validators, since `deploy.mjs` saves a funded devnet key to `fuzzer-account.json`
 (mode 600, git-ignored).
 
