@@ -3,7 +3,8 @@
 //   node deploy.mjs              create a faucet account, install, start
 //   SEED=s... node deploy.mjs    use an existing funded account instead
 //
-// Steps: account -> SetHook (HookOn: Cron + Invoke only) -> CronSet
+// Steps: account -> AccountSet asfTshCollect -> SetHook (HookOn: Cron +
+// Invoke only, hsfCOLLECT) -> CronSet
 // (every DELAY seconds, 256 repeats; the hook re-arms itself) -> one Invoke
 // so the first case runs immediately.
 
@@ -65,6 +66,10 @@ const account = await getAccount();
 const wasmHex = fs.readFileSync(WASM).toString("hex").toUpperCase();
 const ns = crypto.createHash("sha256").update("chaos-fuzzer-apploader").digest("hex").toUpperCase();
 
+// Cron wakes the owner's hooks as a weak "collect call": the account must
+// set lsfTshCollect and the hook must carry hsfCOLLECT, or Cron never fires it.
+await submit(account, { TransactionType: "AccountSet", SetFlag: 11 /* asfTshCollect */ }, "AccountSet");
+
 await submit(account, {
   TransactionType: "SetHook",
   Hooks: [{
@@ -73,7 +78,7 @@ await submit(account, {
       HookOn: HOOK_ON,
       HookNamespace: ns,
       HookApiVersion: 0,
-      Flags: 1, // hsfOverride
+      Flags: 1 | 4, // hsfOverride | hsfCOLLECT
       HookParameters: [{
         HookParameter: {
           HookParameterName: Buffer.from("DELAY").toString("hex").toUpperCase(),

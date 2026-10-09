@@ -65,7 +65,7 @@ Options: `SEED=s... node deploy.mjs` uses your own funded account;
 `DELAY=30` sets the interval in seconds (default 10);
 `WSS=` and `FAUCET=` point at another network.
 
-The Hook fires only on `Cron` and `Invoke` (`HookOn` excludes everything else, so the
+Cron wakes the Hook as a weak *collect call*, so `deploy.mjs` sets `asfTshCollect` on the account and installs the Hook with `hsfCOLLECT`; without both, Cron silently skips it. The Hook fires only on `Cron` and `Invoke` (`HookOn` excludes everything else, so the
 `AccountSet`s it emits do not re-trigger it). `node deploy.mjs` sends one `Invoke`
 so the first case runs immediately.
 
