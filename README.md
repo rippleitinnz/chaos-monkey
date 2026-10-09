@@ -17,7 +17,7 @@ state".
 |---|---|---|---|
 | **A: AppLoader** | `featurePWALoader` document validation, via `emit()` | PWA devnet | built, verified |
 | B: RNG invariants | `featureRNG`: attempts to read the RNG state; `dice` / `util_random` edges | RNG devnet | planned |
-| C: Hook API boundaries | pointer, length and slot edges across the host functions | any | planned |
+| **C: Hook API boundaries** | pointer, length and slot edges across the host functions | any | built |
 
 ### Harness A: AppLoader
 
@@ -105,18 +105,55 @@ predates `prepare`, `util_random` and `dice` and rejects Hooks that import them.
 `include/hook/` holds the Hook headers from the xahaud `pwabootloader` branch
 (`sfAppLoader`, `ttCRON`, `ttCRON_SET`, `KEYLET_APP_LOADER`).
 
+## Harness C: Hook API boundaries
+
+Each wake the Hook:
+
+1. draws 32 bytes from `ledger_nonce`,
+2. selects one of 50 boundary test cases (`seed[0] % 50`),
+3. calls one host function with pointer, length or slot arguments whose expected return
+   code is **known by construction** from the Hook API spec,
+4. compares the actual return code to the expected one and records any mismatch.
+
+**Cases (50 total):** OUT_OF_BOUNDS (0–17): invalid or edge pointers for `hook_account`,
+`ledger_nonce`, `ledger_last_hash`, `util_sha512h`, `state`, `state_set`, `otxn_field`,
+`hook_param`, `slot`, `etxn_details`, `util_accid`, `util_raddr`. TOO_SMALL (18–22):
+output buffer too short. Key boundary cases (23–28): key length 0 (TOO_SMALL) and 33
+(TOO_BIG) for `state`, `state_set`, `hook_param`. DOESNT_EXIST (29–36): uninitialised
+slots, missing state key. INVALID_ARGUMENT (37–38): slot 0 (reserved). INVALID_FIELD
+(39–40): unknown `sfField` code. MEM_OVERLAP (41–44): overlapping buffers in
+`util_sha512h` and `state`. Success cases (45–49): `util_sha512h` with empty input,
+valid `otxn_field` reads, `hook_account` and `ledger_nonce` with exact-size buffers.
+
+**Guard-checker constraints:** No internal function calls; WCE tree depth ≤ 16.
+Both loops (`nk[]`, `fkey[]`) that previously pushed depth to 17 are replaced with
+explicit 8×u32 unrolled writes. Max WCE depth: ~15.
+
+```bash
+node deploy-hookapi.mjs         # faucet account, SetHook, CronSet, first Invoke
+node status-hookapi.mjs         # runs, correct, FINDINGS by case
+node publish-dashboard-hookapi.mjs  # live dashboard (separate faucet account)
+```
+
 ## Layout
 
 ```
-src/apploader/fuzz_apploader.c   the Hook
+src/apploader/fuzz_apploader.c   harness A Hook
 src/apploader/gen.h              case generator, shared by the Hook and the native check
-test/native_check.cpp            generator vs real validator
+src/hookapi/fuzz_hookapi.c       harness C Hook (50 boundary test cases)
+src/hookapi/cases.h              case definitions, CASE_NAMES[], reference only
+test/native_check.cpp            harness A generator vs real validator
 include/hook/                    Hook API headers (pwabootloader branch)
-dist/fuzz_apploader.wasm         prebuilt Hook
-deploy.mjs / status.mjs          install and report
-publish-dashboard.mjs            publish the live dashboard page
-dashboard/                       dashboard source and minifying build
-dist/dashboard.html              prebuilt dashboard (placeholders filled at publish)
+dist/fuzz_apploader.wasm         prebuilt harness A Hook
+dist/fuzz_hookapi.wasm           prebuilt harness C Hook
+deploy.mjs / status.mjs                       harness A install and report
+deploy-hookapi.mjs / status-hookapi.mjs       harness C install and report
+publish-dashboard.mjs            publish harness A live dashboard
+publish-dashboard-hookapi.mjs    publish harness C live dashboard
+dashboard/                       harness A dashboard source
+dashboard-hookapi/               harness C dashboard source
+dist/dashboard.html              prebuilt harness A dashboard
+dist/dashboard-hookapi.html      prebuilt harness C dashboard
 tools/guard-checker-api.patch    adds prepare/util_random/dice to the guard checker
 ```
 

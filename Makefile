@@ -15,15 +15,24 @@ GUARD_CHECK  ?= $(TOOLS)/guard-checker/guard_checker
 XAHAUD_SRC   ?= ../xahaud
 CASES        ?= 500000
 
-WASM_FLAGS = --target=wasm32 -nostdlib -fno-builtin -O2 -Iinclude -Isrc/apploader \
-             -Wl,--no-entry -Wl,--allow-undefined -Wl,--export=hook -Wl,--export=cbak
+WASM_FLAGS_A = --target=wasm32 -nostdlib -fno-builtin -O2 -Iinclude -Isrc/apploader \
+               -Wl,--no-entry -Wl,--allow-undefined -Wl,--export=hook -Wl,--export=cbak
 
-all: dist/fuzz_apploader.wasm
+WASM_FLAGS_C = --target=wasm32 -nostdlib -fno-builtin -O2 -Iinclude -Isrc/hookapi \
+               -Wl,--no-entry -Wl,--allow-undefined -Wl,--export=hook -Wl,--export=cbak
+
+all: dist/fuzz_apploader.wasm dist/fuzz_hookapi.wasm
 
 dist/fuzz_apploader.wasm: src/apploader/fuzz_apploader.c src/apploader/gen.h
 	@mkdir -p build dist
-	$(CLANG) $(WASM_FLAGS) -o build/fuzz_apploader.raw.wasm $<
+	$(CLANG) $(WASM_FLAGS_A) -o build/fuzz_apploader.raw.wasm $<
 	$(HOOK_CLEANER) build/fuzz_apploader.raw.wasm $@ > /dev/null
+	$(GUARD_CHECK) $@ 2>&1 | tail -2
+
+dist/fuzz_hookapi.wasm: src/hookapi/fuzz_hookapi.c src/hookapi/cases.h
+	@mkdir -p build dist
+	$(CLANG) $(WASM_FLAGS_C) -o build/fuzz_hookapi.raw.wasm $<
+	$(HOOK_CLEANER) build/fuzz_hookapi.raw.wasm $@ > /dev/null
 	$(GUARD_CHECK) $@ 2>&1 | tail -2
 
 check: build/native_check
@@ -46,4 +55,4 @@ tools:
 clean:
 	rm -rf build
 
-.PHONY: all check tools clean
+.PHONY: all check tools clean hookapi apploader
