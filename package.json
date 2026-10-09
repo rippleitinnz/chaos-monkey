@@ -1,0 +1,9 @@
+{
+  "name": "chaos-monkey",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "xrpl-accountlib": "^9.3.2",
+    "xrpl-client": "^2.4.0"
+  }
+}
