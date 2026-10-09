@@ -69,6 +69,25 @@ Cron wakes the Hook as a weak *collect call*, so `deploy.mjs` sets `asfTshCollec
 `AccountSet`s it emits do not re-trigger it). `node deploy.mjs` sends one `Invoke`
 so the first case runs immediately.
 
+## Live dashboard
+
+`dashboard/dashboard.html` is a live view of the fuzzer, itself published as an
+on-ledger AppLoader page on its own account (the fuzzer account's page is the fuzz
+target and changes with every passing case). It opens a WebSocket to the devnet,
+replays recent wakes with `account_tx`, subscribes for new ones, and reads the
+counters from Hook state. It shows run counters and the pass/fail split, a coverage
+grid of the 22 test classes (green: must pass, amber: must fail, red: a finding),
+the latest wakes with the consensus verdict, and the size of the document currently
+being served.
+
+```bash
+node publish-dashboard.mjs      # second faucet account, AccountSet with the page
+```
+
+It prints the URL (`https://pwa.pwapp.xahau-dev.net/<dashboard account>`).
+`dist/dashboard.html` is prebuilt (minified to fit 4096 bytes); after editing the
+source, rebuild with `npm run build:dashboard` (needs the `terser` dev dependency).
+
 ## Building
 
 ```bash
@@ -93,6 +112,9 @@ test/native_check.cpp            generator vs real validator
 include/hook/                    Hook API headers (pwabootloader branch)
 dist/fuzz_apploader.wasm         prebuilt Hook
 deploy.mjs / status.mjs          install and report
+publish-dashboard.mjs            publish the live dashboard page
+dashboard/                       dashboard source and minifying build
+dist/dashboard.html              prebuilt dashboard (placeholders filled at publish)
 tools/guard-checker-api.patch    adds prepare/util_random/dice to the guard checker
 ```
 
