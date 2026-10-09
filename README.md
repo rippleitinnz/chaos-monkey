@@ -28,10 +28,12 @@ Each wake the Hook:
    from the rules documented in `AppLoader.h`: a random mix of features that must pass
    (BOM, whitespace, mixed-case tags, `<html/>`, `</html \t>`, multi-byte UTF-8, C1
    controls, noncharacters other than U+FFFE/U+FFFF, exactly 4096 bytes) and at most
-   **one** injected fault from 21 classes that must fail (double BOM, VT, `<!doctype>`
-   without whitespace, `<htmlx>`, missing or malformed `</html>`, trailing garbage,
-   truncated UTF-8, 4097 bytes, U+FFFE/U+FFFF, overlongs, surrogates, above U+10FFFF,
-   lone continuation, NUL, DEL, …),
+   **one** injected fault from 24 classes that must fail (double BOM, VT or other
+   forbidden C0 before opener, `<!doctype>` without whitespace, `<htmlx>`, missing or
+   malformed `</html>`, `</html` without `>`, trailing garbage, truncated UTF-8, 4097 bytes,
+   U+FFFE/U+FFFF, overlongs, surrogates, above U+10FFFF, lone continuation, NUL, DEL, VT
+   or SOH in body) and 2 "quirk pass" classes that must be accepted (`<!doctype svg>` and
+   multiple `</html>` tags),
 3. wraps it in an `AccountSet`, runs `prepare()` and `emit()`, and reads the consensus
    verdict (`emit()` succeeds or returns `EMISSION_FAILURE` from preflight),
 4. records any disagreement in Hook state with the 32 input bytes, so the case can be
@@ -47,7 +49,7 @@ the thing under test and changes constantly.
 so an on-ledger finding points at the emit path or at the deployed binary differing
 from the branch.
 
-**Budget.** Worst-case execution 42,980 instructions (limit 65,535).
+**Budget.** Worst-case execution 45,098 instructions (limit 65,535).
 
 ## Quick start (PWA devnet)
 
