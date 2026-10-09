@@ -1,20 +1,20 @@
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chaos Monkey</title><style>
-body{margin:0;background:#0d1117;color:#9da7b3;font:13px/1.45 ui-monospace,Menlo,monospace}
-main{max-width:780px;margin:auto;padding:16px}h1{margin:0;font-size:19px;color:#fff}
-#d{display:inline-block;width:9px;height:9px;border-radius:50%;background:#555;margin-right:6px}
-.k,.g{display:grid;gap:6px;grid-template-columns:repeat(auto-fill,minmax(115px,1fr))}
-.k{margin:12px 0 8px}.k div,.g div{background:#161b22;border:1px solid #2a313b;border-radius:7px;padding:6px 8px}
-.k b{display:block;font-size:23px;color:#fff}.r b{color:#f66}
-#s{height:6px;border-radius:3px;background:#d29922;overflow:hidden}#s i{display:block;height:100%;background:#3fb950}
-h2{font-size:11px;color:#6e7681;margin:16px 0 6px;font-weight:400}
-.g div{font-size:11px;opacity:.3}.g b{float:right;color:#fff}.g .h{opacity:1}.p{border-color:#3fb950!important}.f{border-color:#d29922!important}.x{border-color:#f66!important;background:#3a1418!important}
-#e div{border-bottom:1px solid #1d232b}.o{color:#3fb950}.b{color:#f66}a{color:#58a6ff}
-</style></head><body><main><h1>Chaos Monkey</h1><div><i id=d></i><span id=l>connecting</span> &middot; <span id=a></span></div>
-<div>each wake: random document &rarr; emit() preflight &rarr; consensus verdict vs spec</div>
-<div class=k id=k></div><div id=s><i></i></div>
-<h2>FAULT COVERAGE &middot; green must pass, amber must fail, red = finding</h2><div class=g id=g></div>
-<h2>LIVE WAKES</h2><div id=e></div><h2>FUZZ TARGET</h2><div id=t></div></main><script>
-const F="FUZZER",NS="NAMESPACE",W="wss://pwapp.xahau-dev.net",
+html{background:#f7f7f4}html.dk{filter:invert(.9) hue-rotate(180deg)}
+body{margin:0;color:#3a3f45;font:13px/1.5 monospace}
+main{max-width:780px;margin:auto;padding:16px}h1{margin:0;font-size:19px}
+button{float:right}
+p{color:#555}.y{color:#d4a017}.k,.g{display:grid;gap:6px;grid-template-columns:repeat(auto-fill,minmax(115px,1fr))}
+.k div,.g div{background:#fff;border:1px solid #ddd;border-radius:7px;padding:6px 8px}
+.k b{display:block;font-size:23px;color:#111}.r b,.b{color:#c62828}
+#s{height:6px;border-radius:3px;background:#d4a017;overflow:hidden;margin:8px 0}#s i{display:block;height:100%;background:#2e9e4f}
+h2{font-size:11px;color:#888;font-weight:400}
+.g div{font-size:11px;opacity:.35}.g b{float:right}.g .h{opacity:1}.g .p{border-color:#2e9e4f}.g .f{border-color:#d4a017}.g .x{border-color:#c62828;background:#fdecec}
+#e div{border-bottom:1px solid #eee}.o{color:#2e9e4f}
+</style></head><body><main><button onclick="document.documentElement.classList.toggle('dk')">&#9680;</button><h1>Chaos Monkey</h1>
+<div><span id=l>connecting</span> &middot; <span id=a></span></div>
+<p>A Hook wakes itself every few ledgers, builds a random HTML page and submits it via emit(), so the node's real AppLoader validation judges it inside consensus. <b class=o>Green</b>: clean, must pass. <b class=y>Amber</b>: one broken rule, must fail. <b class=b>Red</b>: consensus disagreed with the spec.</p>
+<div class=k id=k></div><div id=s><i></i></div><h2>COVERAGE</h2><div class=g id=g></div><h2>LIVE WAKES</h2><div id=e></div><p id=t></p></main><script>
+const F="FUZZER",NS="NAMESPACE",
 N="clean|2x BOM|VT lead|<!doctype>|<htmlx>|no <html>|no </html>|</html/>|</htmlx>|junk tail|cut UTF-8|4097 B|U+FFFE|U+FFFF|overlong2|overlong3|surrogate|>U+10FFFF|lone cont|NUL|DEL|VT body".split("|"),
 C=N.map(_=>0),X=C.slice(),E=[],S=[0,0,0,0,0],Q={},$=i=>document.getElementById(i),z=s=>s.replace(/</g,"&lt;");
 let L=0,n=0,w;
@@ -31,16 +31,16 @@ const R=()=>{
  $("k").innerHTML=["Runs","OK pass","OK fail","Findings","Harness err"].map((t,j)=>`<div${j>2&&S[j]?" class=r":""}>${t}<b>${S[j]}</b></div>`).join("");
  $("s").firstChild.style.width=(S[1]+S[2]?100*S[1]/(S[1]+S[2]):50)+"%";
  $("g").innerHTML=N.map((t,f)=>`<div class="${C[f]?"h ":""}${X[f]?"x":f?"f":"p"}">${z(t)}<b>${C[f]}</b></div>`).join("");
- $("e").innerHTML=E.slice(0,14).map(o=>`<div>#${o.l} ${z(N[o.f])} &middot; must ${o.f?"fail":"pass"} &middot; ${o.b?"<b class=b>FINDING &#10007;</b>":(o.f?"rejected":"accepted")+" <span class=o>&#10003;</span>"}</div>`).join("")||"waiting";
- $("t").innerHTML=`Serving a ${L}-byte test document &middot; <a href="https://pwa.pwapp.xahau-dev.net/${F}" target=_blank>open</a>`};
-const go=()=>{w=new WebSocket(W);
- w.onopen=()=>{$("d").style.background="#3fb950";
+ $("e").innerHTML=E.slice(0,14).map(o=>`<div>#${o.l} ${z(N[o.f])} &rarr; must ${o.f?"fail":"pass"} ${o.b?"<b class=b>FINDING</b>":"<b class=o>&#10003;</b>"}</div>`).join("")||"waiting";
+ $("t").innerHTML=`Now serving a ${L}-byte test document &middot; <a href="https://pwa.pwapp.xahau-dev.net/${F}" target=_blank>open</a>`};
+const go=()=>{w=new WebSocket("wss://pwapp.xahau-dev.net");
+ w.onopen=()=>{$("l").className="o";
   q({command:"account_tx",account:F,limit:300},r=>{(r.transactions||[]).forEach(x=>tx(x.tx,x.meta,x.tx.ledger_index));st()});
   q({command:"subscribe",accounts:[F],streams:["ledger"]})};
  w.onmessage=m=>{const d=JSON.parse(m.data);
   if(Q[d.id]){Q[d.id](d.result||{});delete Q[d.id]}
   else if(d.type=="ledgerClosed")$("l").textContent="ledger "+d.ledger_index;
   else if(d.type=="transaction"&&d.validated){tx(d.transaction,d.meta,d.ledger_index,1);st()}};
- w.onclose=()=>{$("d").style.background="#555";setTimeout(go,3e3)}};
+ w.onclose=()=>{$("l").className="";setTimeout(go,3e3)}};
 $("a").textContent=F;go();
 </script></body></html>

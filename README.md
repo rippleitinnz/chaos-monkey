@@ -75,7 +75,7 @@ so the first case runs immediately.
 on-ledger AppLoader page on its own account (the fuzzer account's page is the fuzz
 target and changes with every passing case). It opens a WebSocket to the devnet,
 replays recent wakes with `account_tx`, subscribes for new ones, and reads the
-counters from Hook state. It shows run counters and the pass/fail split, a coverage
+counters from Hook state. It opens in light mode (the ◐ button switches to dark for the visit; sandboxed pages have no storage, so it does not persist), explains what the fuzzer does, and shows run counters and the pass/fail split, a coverage
 grid of the 22 test classes (green: must pass, amber: must fail, red: a finding),
 the latest wakes with the consensus verdict, and the size of the document currently
 being served.
