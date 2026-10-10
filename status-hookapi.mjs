@@ -1,60 +1,27 @@
 // Chaos Monkey, harness C — show progress and findings.
 //
 //   node status-hookapi.mjs
+//   ADDRESS=r... node status-hookapi.mjs
 //
-// Reads the hook's state on the hookapi fuzzer account (from hookapi-account.json,
-// or ADDRESS=r...) and prints the counters plus every recorded finding.
+// Reads the hook's state on the hookapi fuzzer account (hookapi-account.json,
+// or ADDRESS=r...). Case names and expected values come from
+// src/hookapi/cases.mjs — the same table the Hook is generated from.
 
 import fs from "node:fs";
 import crypto from "node:crypto";
 import { XrplClient } from "xrpl-client";
+import { CASES, KNOWN_DIVERGENCE } from "./src/hookapi/cases.mjs";
 
 const WSS = process.env.WSS || "wss://pwapp.xahau-dev.net";
 const address = process.env.ADDRESS ||
   JSON.parse(fs.readFileSync("hookapi-account.json", "utf8")).address;
 const ns = crypto.createHash("sha256").update("chaos-fuzzer-hookapi").digest("hex").toUpperCase();
 
-// Case names aligned with cases.h CASE_NAMES[]
-const CASE_NAMES = [
-  "hook_account OOB", "nonce OOB",       "hash OOB",
-  "sha512h wOOB",     "sha512h rOOB",    "state wOOB",
-  "state kOOB",       "state_set vOOB",  "state_set kOOB",
-  "otxn_field wOOB",  "param wOOB",      "param kOOB",
-  "slot wOOB",        "etxn_det OOB",    "accid wOOB",
-  "raddr wOOB",       "sha512h rEDGE",   "state kEDGE",
-  "acct small",       "nonce small",     "hash small",
-  "sha512h small",    "state w=0",       "state k=0",
-  "state k=33",       "ss k=0",          "ss k=33",
-  "param k=0",        "param k=33",      "slot empty",
-  "slot_size empty",  "slot_cnt empty",  "slot_sub empty",
-  "slot_arr empty",   "slot_flt empty",  "slot_type empty",
-  "state missing",    "slot(0)",         "slot_clr(0)",
-  "field 0x0000",     "field 0xFFFF",    "sha512 ov==",
-  "sha512 ov+",       "sha512 ov-",      "state ov",
-  "sha512 len=0",     "otxn sfType",     "otxn sfFee",
-  "acct exact",       "nonce exact",
-];
-
-const EXPECTED = [
-  -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, // 0-17 OUT_OF_BOUNDS
-  -4,-4,-4,-4,-4,  // 18-22 TOO_SMALL
-  -4,-3,-4,-3,-4,-3,  // 23-28 key boundaries
-  -5,-5,-5,-5,-5,-5,-5,-5, // 29-36 DOESNT_EXIST
-  -5,-5,   // 37-38 slot(0)/slot_clear(0) — empty slot, not invalid arg
-  -17,-17, // 39-40 INVALID_FIELD — 0x0000/0xFFFF are not valid sf codes
-  -43,-43,-43,-43, // 41-44 MEM_OVERLAP
-  32, -5, -5, 20, 32, // 45-49: sha512h len=0, sfType/sfFee absent on Cron, acct exact, nonce exact
-];
-
-const ERROR_NAMES = {
-  "-1": "OUT_OF_BOUNDS",
-  "-3": "TOO_BIG",
-  "-4": "TOO_SMALL",
-  "-5": "DOESNT_EXIST",
-  "-7": "INVALID_ARGUMENT",
-  "-17": "INVALID_FIELD",
-  "-43": "MEM_OVERLAP",
-};
+// Error names from the same header the Hook is compiled against.
+const ERR = {};
+for (const m of fs.readFileSync("include/hook/error.h", "utf8").matchAll(/#define\s+([A-Z_]+)\s+(-\d+)/g))
+  ERR[m[2]] = m[1];
+const show = (v) => (ERR[String(v)] ? `${ERR[String(v)]} (${v})` : String(v));
 
 const client = new XrplClient(WSS);
 const entries = [];
@@ -65,42 +32,47 @@ do {
   entries.push(...(r.namespace_entries || []));
   marker = r.marker;
 } while (marker);
+client.close();
 
-const u32 = (h, o) => parseInt(h.slice(o * 2, o * 2 + 8), 16);
-// STATS key is 5 bytes "STATS" = 5354415453 (rest 0), data is 16 bytes = 32 hex chars
-const stats = entries.find((e) => e.HookStateKey && e.HookStateKey.toUpperCase().endsWith("5354415453") && e.HookStateData.length === 32);
+const u32 = (h, byteOff) => parseInt(h.slice(byteOff * 2, byteOff * 2 + 8), 16);
+
+// "STATS" is a 5-byte key, left-padded to 32 by the node; value is 16 bytes.
+const stats = entries.find((e) =>
+  (e.HookStateKey || "").toUpperCase().endsWith("5354415453") && (e.HookStateData || "").length === 32);
+
+console.log(`Account   ${address}`);
+console.log(`Cases     ${CASES.length} (spec-only, verified against xahaud 0f3258d)`);
 if (stats) {
   const d = stats.HookStateData;
-  console.log(`Account   ${address}`);
   console.log(`Runs      ${u32(d, 0)}`);
   console.log(`Correct   ${u32(d, 4)}`);
   console.log(`FINDINGS  ${u32(d, 8)}`);
 } else {
-  console.log(`Account   ${address}`);
   console.log("No STATS yet — the hook has not run.");
 }
 
-// Findings: key has case_id in byte 0, rest 0. Data: case(1) exp_lo(4) act_lo(4)
-const findings = entries.filter((e) => {
-  if (!e.HookStateData || e.HookStateData.length < 18) return false;
-  if (e.HookStateKey && e.HookStateKey.toUpperCase().endsWith("5354415453")) return false;
-  return true;
-});
+// Finding records: key = [case, 'F', 0 x 30]; value = case(1) expected(8) actual(8).
+const findings = entries
+  .filter((e) => (e.HookStateKey || "").slice(2, 4).toUpperCase() === "46" && (e.HookStateData || "").length === 34)
+  .map((e) => {
+    const d = Buffer.from(e.HookStateData, "hex");
+    return { c: d[0], exp: d.readBigInt64BE(1), act: d.readBigInt64BE(9) };
+  })
+  .sort((a, b) => a.c - b.c);
 
 if (findings.length === 0) {
-  console.log("\nNo findings — all tested cases returned expected values.");
+  console.log("\nNo findings — every case that has run returned its spec value.");
 } else {
-  console.log(`\n${"─".repeat(60)}`);
-  console.log("FINDINGS:");
-  for (const e of findings) {
-    const d = Buffer.from(e.HookStateData, "hex");
-    const caseId = d[0];
-    const expRaw = d.readInt32BE(1);
-    const actRaw = d.readInt32BE(5);
-    const name = CASE_NAMES[caseId] || `case ${caseId}`;
-    const expName = ERROR_NAMES[String(expRaw)] || String(expRaw);
-    const actName = ERROR_NAMES[String(actRaw)] || String(actRaw);
-    console.log(`  case ${String(caseId).padStart(2)} (${name}): expected ${expName}, got ${actName}`);
+  console.log(`\n${"─".repeat(72)}\nFINDINGS (latest record per case):`);
+  for (const f of findings) {
+    const k = CASES[f.c];
+    if (!k) { console.log(`  case ${f.c}: unknown case id (stale record?)`); continue; }
+    const tag = KNOWN_DIVERGENCE[k.id] ? "  [known doc/code divergence]" : "";
+    console.log(`  ${String(f.c).padStart(2)} ${k.id.padEnd(9)} ${k.call}`);
+    console.log(`     expected ${show(f.exp)}, got ${show(f.act)}${tag}`);
+    console.log(`     spec: ${k.doc}`);
   }
+  const fresh = findings.filter((f) => CASES[f.c] && !KNOWN_DIVERGENCE[CASES[f.c].id]);
+  console.log(`\n${fresh.length} new finding(s) beyond the known divergence.` +
+    (fresh.length ? " Re-check each against the release build before reporting." : ""));
 }
-client.close();

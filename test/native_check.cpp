@@ -11,14 +11,10 @@ extern "C" {
 #include "gen.h"
 }
 
+// Names come from src/apploader/faults.mjs via tools/check-faults.mjs.
 static const char* FAULT_NAMES[F_COUNT] = {
-    "none", "double BOM", "VT before opener", "<!doctype> without whitespace",
-    "<htmlx> opener", "no <html> element", "missing </html>", "</html/>",
-    "</htmlx>", "trailing garbage", "truncated UTF-8 at end", "4097 bytes",
-    "U+FFFE", "U+FFFF", "overlong 2-byte", "overlong 3-byte", "surrogate",
-    "above U+10FFFF", "lone continuation", "NUL", "DEL", "VT in body",
-    "C0 ctrl in body", "C0 ctrl before opener", "</html no >",
-    "<!doctype svg> (pass)", "multi-</html> (pass)"};
+#include "apploader_fault_names.inc"
+};
 
 int main(int argc, char** argv)
 {

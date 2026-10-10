@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width"><title>CM-C</title><style>
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width"><title>CM-D</title><style>
 html{background:#f7f7f4}html.dk{filter:invert(.9) hue-rotate(180deg)}
 body{margin:0;color:#3a3f45;font:12px/1.4 monospace}main{max-width:780px;margin:auto;padding:12px}
 h1{margin:0;font-size:17px}button{float:right}
@@ -11,12 +11,12 @@ h2{font:10px monospace;color:#888;margin:5px 0 2px}
 .ok{color:#2e9e4f}.bd{color:#c62828}
 </style></head><body><main>
 <button onclick="document.documentElement.classList.toggle('dk')">◐</button>
-<h1>Chaos Monkey - Hook API</h1>
+<h1>Chaos Monkey - Float/STO</h1>
 <p><span id=L>…</span> <span id=A></span>
 <div class=k id=K></div><div id=s><i></i></div>
-<h2>CASES · spec-only</h2><div class=g id=G></div><h2>WAKES</h2><div id=ev></div>
+<h2>CASES - spec-only</h2><div class=g id=G></div><h2>WAKES</h2><div id=ev></div>
 </main><script>
-const F="FUZZER",NS="NAMESPACE",C="__CASES__".split("|").flatMap(g=>{const[p,s]=g.split(":");return s.split(",").map(x=>p+"."+x)}),N=C.length;
+const F="FUZZER",NS="NAMESPACE",C="fo:one|fs:one,adj,pi,ovf,unf|fn:one,pi,bad|fa:two,zero,bad|fm:six,zero|fd:three,dz|fi:one,half,dz|fc:eq,lt,gt,ne,all,bad|ft:one,pi2,dp16,neg,abs|fx:one|fg:neg,pos|fl:100,neg,bad|fr:neg,bad|fq:three,dz|fz:oob,bad|fy:oob,short|sv:oob,ok,trunc,len0,len1|sf:oob,small,miss,ok|sa:oob,small|eg:one|og:none|en:oob,ok|ef:oob,bad|em:rOOB,wOOB,bad".split("|").flatMap(g=>{const[p,s]=g.split(":");return s.split(",").map(x=>p+"."+x)}),N=C.length;
 const P=[...new Set(C.map(x=>x.split(".")[0]))],col=x=>`hsl(${P.indexOf(x.split(".")[0])*360/P.length},55%,50%)`;
 const H=Array(N).fill(0),B=Array(N).fill(0),X=new Set,EV=[],S=[0,0,0],Q={};
 let n=0,w;

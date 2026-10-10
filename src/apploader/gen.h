@@ -19,13 +19,21 @@
  * loop appears once, tag strings go through one segment writer, and padding
  * is written eight bytes per iteration.
  *
- * Fault classes 22-26 added in v2:
+ * Fault classes 22-25 added in v2:
  *   22 F_BODY_C0      : other forbidden C0 control in body (SOH..US minus whitespace/VT/NUL/DEL)
  *   23 F_OPENER_C0    : forbidden C0 control other than VT before the opener
  *   24 F_CLOSE_NO_GT  : </html without closing > (truncated close tag)
- *   25 F_DOCTYPE_OTHER: <!doctype svg> — non-html doctype; must PASS (spec only requires
- *                       "<!doctype " prefix), exercises the validator doesn't check the name
- *   26 F_MULTI_CLOSE  : multiple </html> tags; must PASS — last match wins, nothing after
+ *   25 F_MULTI_CLOSE  : multiple </html> tags; must PASS. AppLoader.h: "the last such
+ *                       end tag followed by nothing but ASCII whitespace".
+ *
+ * v3 (spec-only rule): the former class 25, "<!doctype svg> must pass", was removed.
+ * AppLoader.h requires the document to open with "an HTML doctype or an <html start
+ * tag"; <!doctype svg> is not an HTML doctype, and PWALoader_test does not pin it.
+ * The validator accepts it only because it checks the "<!doctype" + whitespace
+ * prefix, so the case tested code behaviour, not the spec. See docs/hookapi-doc-gaps.md.
+ * Every remaining class is stated in AppLoader.h or pinned in PWALoader_test.
+ * The fault table for reports lives in faults.mjs; tools/check-faults.mjs keeps it
+ * in step with this file.
  */
 
 #ifndef CHAOS_GEN_H
@@ -66,15 +74,14 @@
 #define F_BODY_C0 22    /* other forbidden C0 (SOH/STX/ETX/etc.) in body      */
 #define F_OPENER_C0 23  /* forbidden C0 (not VT/NUL/DEL) before opener        */
 #define F_CLOSE_NO_GT 24 /* </html with no closing >                          */
-#define F_DOCTYPE_OTHER 25 /* <!doctype svg> — non-html name; must PASS       */
-#define F_MULTI_CLOSE 26   /* multiple </html> tags; must PASS (last wins)    */
-#define F_COUNT 27
+#define F_MULTI_CLOSE 25   /* multiple </html> tags; must PASS (last wins)    */
+#define F_COUNT 26
 
 /* Body items: first byte = length. 0..11 must pass; 12..22 are the body
    faults, indexed by their fault id (F_BODY_FFFE == 12 .. F_BODY_C0 == 22).
-   F_OPENER_C0..F_MULTI_CLOSE (23-26) are not body-item faults; pad to keep
-   the table index scheme consistent (the extra entry is never selected). */
-static const unsigned char ITEMS[27][5] = {
+   F_OPENER_C0..F_MULTI_CLOSE (23-25) are not body-item faults; pad to keep
+   the table index scheme consistent (the extra entries are never selected). */
+static const unsigned char ITEMS[26][5] = {
     {1, 'a', 0, 0, 0},
     {1, 'Z', 0, 0, 0},
     {1, ' ', 0, 0, 0},
@@ -98,8 +105,7 @@ static const unsigned char ITEMS[27][5] = {
     {1, 0x7F, 0, 0, 0},             /* DEL                    */
     {1, 0x0B, 0, 0, 0},             /* VT                     */
     {1, 0x01, 0, 0, 0},             /* SOH — other C0 control */
-    /* padding entries for F_OPENER_C0..F_MULTI_CLOSE (23-26); never used */
-    {1, 'a', 0, 0, 0},
+    /* padding entries for F_OPENER_C0..F_MULTI_CLOSE (23-25); never used */
     {1, 'a', 0, 0, 0},
     {1, 'a', 0, 0, 0},
     {1, 'a', 0, 0, 0},
@@ -119,19 +125,16 @@ static const unsigned char WS[5] = {0x09, 0x0A, 0x0C, 0x0D, 0x20};
 #define S_CLOSE 8          /* "</html"              */
 #define S_CLOSE_SLASH 9    /* "</html/>"            */
 #define S_CLOSE_X 10       /* "</htmlx>"            */
-#define S_DOCTYPE_SVG 11   /* "<!doctype svg>"      */
-static const char* const STR[12] = {"<!doctype", "<!doctype>", "html>",
+static const char* const STR[11] = {"<!doctype", "<!doctype>", "html>",
                                     "<html>", "<html lang=en>", "<html/>",
                                     "<htmlx>", "<html\tdir=ltr>", "</html",
-                                    "</html/>", "</htmlx>",
-                                    "<!doctype svg>"};
-static const unsigned char STRLEN[12] = {9, 10, 5, 6, 14, 7, 7, 14, 6, 8, 8,
-                                         14};
+                                    "</html/>", "</htmlx>"};
+static const unsigned char STRLEN[11] = {9, 10, 5, 6, 14, 7, 7, 14, 6, 8, 8};
 
 /* Returns 1 if the fault class means the document should pass */
 GI int fault_is_pass(int f)
 {
-    return f == F_NONE || f == F_DOCTYPE_OTHER || f == F_MULTI_CLOSE;
+    return f == F_NONE || f == F_MULTI_CLOSE;
 }
 
 GI int gen(const unsigned char* r, unsigned char* o, int* len)
@@ -171,16 +174,6 @@ GI int gen(const unsigned char* r, unsigned char* o, int* len)
     }
     else if (fault == F_HTMLX_OPENER)
         seg[nseg++] = S_HTMLX;
-    else if (fault == F_DOCTYPE_OTHER)
-    {
-        /* "<!doctype svg>" — non-html doctype name; validator only checks
-           the "<!doctype " prefix, so this must pass */
-        seg[nseg++] = S_DOCTYPE_SVG;
-        ws_after_first = -1; /* no extra WS; the string is complete */
-        seg[nseg++] = vhtml == 0 ? S_HTML
-            : vhtml == 1         ? S_HTML_LANG
-                                 : S_HTML_SELF;
-    }
     else if ((r[6] & 3) != 0 || fault == F_NO_HTML_ELEMENT)
     {
         seg[nseg++] = S_DOCTYPE;

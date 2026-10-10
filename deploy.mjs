@@ -1,6 +1,9 @@
 // Chaos Monkey, harness A — deploy to the PWA devnet.
 //
 //   node deploy.mjs              create a faucet account, install, start
+//   NEW=1 node deploy.mjs        start over on a fresh faucet account: the old
+//                                fuzzer-account.json is kept as
+//                                fuzzer-account.json.bak.<timestamp>
 //   SEED=s... node deploy.mjs    use an existing funded account instead
 //
 // Steps: account -> AccountSet asfTshCollect -> SetHook (HookOn: Cron +
@@ -29,6 +32,12 @@ const HOOK_ON = (ALL & ~(1n << 92n) & ~(1n << 99n) & ~(1n << 22n))
 
 async function getAccount() {
   if (process.env.SEED) return derive.familySeed(process.env.SEED);
+  if (process.env.NEW === "1" && fs.existsSync(ACCOUNT_FILE)) {
+    const ts = new Date().toISOString().replace(/[-:]/g, "").replace("T", "_").slice(0, 15);
+    const kept = `${ACCOUNT_FILE}.bak.${ts}`;
+    fs.renameSync(ACCOUNT_FILE, kept);
+    console.log("NEW=1: previous account kept in", kept);
+  }
   if (fs.existsSync(ACCOUNT_FILE)) {
     const saved = JSON.parse(fs.readFileSync(ACCOUNT_FILE, "utf8"));
     console.log("Using saved account", saved.address);

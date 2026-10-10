@@ -4,6 +4,14 @@ tools/hook-cleaner-c/
 tools/guard-checker/
 # funded devnet key files — never commit
 fuzzer-account.json
+fuzzer-account.json.bak.*
 dashboard-account.json
 hookapi-account.json
+hookapi-account.json.bak.*
 hookapi-dashboard-account.json
+floatsto-account.json
+floatsto-account.json.bak.*
+floatsto-dashboard-account.json
+
+# local edit backups
+*.bak.*
